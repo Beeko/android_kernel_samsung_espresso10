@@ -113,23 +113,6 @@ struct wm8958_enh_eq_cfg {
 	u16 regs[WM8958_ENH_EQ_REGS];
 };
 
-/**
- * Microphone detection rates, used to tune response rates and power
- * consumption for WM8958/WM1811 microphone detection.
- *
- * @sysclk: System clock rate to use this configuration for.
- * @idle: True if this configuration should use when no accessory is detected,
- *        false otherwise.
- * @start: Value for MICD_BIAS_START_TIME register field (not shifted).
- * @rate: Value for MICD_RATE register field (not shifted).
- */
-struct wm8958_micd_rate {
-	int sysclk;
-	bool idle;
-	int start;
-	int rate;
-};
-
 struct wm8994_pdata {
 	int gpio_base;
 
@@ -142,7 +125,6 @@ struct wm8994_pdata {
 	struct wm8994_ldo_pdata ldo[WM8994_NUM_LDO];
 
 	int irq_base;  /** Base IRQ number for WM8994, required for IRQs */
-	unsigned long irq_flags; /** user irq flags */
 
         int num_drc_cfgs;
         struct wm8994_drc_cfg *drc_cfgs;
@@ -161,11 +143,6 @@ struct wm8994_pdata {
 
 	int num_enh_eq_cfgs;
 	struct wm8958_enh_eq_cfg *enh_eq_cfgs;
-
-	int num_micd_rates;
-	struct wm8958_micd_rate *micd_rates;
-
-	bool use_submic;
 
         /* LINEOUT can be differential or single ended */
         unsigned int lineout1_diff:1;
@@ -188,14 +165,8 @@ struct wm8994_pdata {
         unsigned int jd_scthr:2;
         unsigned int jd_thr:2;
 
-	/* Configure WM1811 jack detection for use with external capacitor */
-	unsigned int jd_ext_cap:1;
-
 	/* WM8958 microphone bias configuration */
 	int micbias[2];
-
-	/* WM8958 microphone detection ranges */
-	u16 micd_lvl_sel;
 
 	/* Disable the internal pull downs on the LDOs if they are
 	 * always driven (eg, connected to an always on supply or
@@ -203,17 +174,6 @@ struct wm8994_pdata {
 	 * consumption will rise.
 	 */
 	bool ldo_ena_always_driven;
-
-	/*
-	 * LDO enable delay time
-	 */
-	int ldo_ena_delay;
-
-	/*
-	 * SPKMODE must be pulled internally by the device on this
-	 * system.
-	 */
-	bool spkmode_pu;
 };
 
 #endif
