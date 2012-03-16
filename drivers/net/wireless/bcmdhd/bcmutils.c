@@ -20,7 +20,7 @@
  *      Notwithstanding the above, under no circumstances may you combine this
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
- * $Id: bcmutils.c 312855 2012-02-04 02:01:18Z $
+ * $Id: bcmutils.c 309397 2012-01-19 15:36:59Z $
  */
 
 #include <bcm_cfg.h>
@@ -174,10 +174,6 @@ pktsegcnt_war(osl_t *osh, void *p)
 		len = PKTLEN(osh, p);
 		if (len > 128) {
 			pktdata = (uint8 *)PKTDATA(osh, p);	/* starting address of data */
-			/* Check for page boundary straddle (2048B) */
-			if (((uintptr)pktdata & ~0x7ff) != ((uintptr)(pktdata+len) & ~0x7ff))
-				cnt++;
-
 			align64 = (uint)((uintptr)pktdata & 0x3f);	/* aligned to 64B */
 			align64 = (64 - align64) & 0x3f;
 			len -= align64;		/* bytes from aligned 64B to end */
@@ -628,7 +624,7 @@ pktq_mdeq(struct pktq *pq, uint prec_bmp, int *prec_out)
 	while ((prec = pq->hi_prec) > 0 && pq->q[prec].head == NULL)
 		pq->hi_prec--;
 
-	while ((pq->q[prec].head == NULL) || ((prec_bmp & (1 << prec)) == 0))
+	while ((prec_bmp & (1 << prec)) == 0 || pq->q[prec].head == NULL)
 		if (prec-- == 0)
 			return NULL;
 
@@ -1695,17 +1691,10 @@ static const char *crypto_algo_names[] = {
 	"AES_CCM",
 	"AES_OCB_MSDU",
 	"AES_OCB_MPDU",
-#ifdef BCMCCX
-	"CKIP",
-	"CKIP_MMH",
-	"WEP_MMH",
-	"NALG"
-#else
 	"NALG"
 	"UNDEF",
 	"UNDEF",
 	"UNDEF",
-#endif /* BCMCCX */
 #ifdef BCMWAPI_WPI
 	"WAPI",
 #endif /* BCMWAPI_WPI */

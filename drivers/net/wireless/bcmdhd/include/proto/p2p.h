@@ -21,7 +21,7 @@
  *
  * Fundamental types and constants relating to WFA P2P (aka WiFi Direct)
  *
- * $Id: p2p.h 357863 2012-09-20 06:40:47Z $
+ * $Id: p2p.h 281528 2011-09-02 17:13:26Z $
  */
 
 #ifndef _P2P_H_
@@ -59,8 +59,6 @@ typedef struct wifi_p2p_ie wifi_p2p_ie_t;
 #define P2P_ATTR_LEN_OFF	1
 #define P2P_ATTR_DATA_OFF	3
 
-#define P2P_ATTR_ID_LEN		1	
-#define P2P_ATTR_LEN_LEN	2	
 #define P2P_ATTR_HDR_LEN	3 
 
 
@@ -81,8 +79,6 @@ typedef struct wifi_p2p_ie wifi_p2p_ie_t;
 #define P2P_SEID_GROUP_INFO		14	
 #define P2P_SEID_GROUP_ID		15	
 #define P2P_SEID_P2P_IF			16	
-#define P2P_SEID_OP_CHANNEL		17	
-#define P2P_SEID_INVITE_FLAGS		18	
 #define P2P_SEID_VNDR			221	
 
 #define P2P_SE_VS_ID_SERVICES	0x1b 
@@ -132,42 +128,6 @@ BWL_PRE_PACKED_STRUCT struct wifi_p2p_cfg_tmo_se_s {
 } BWL_POST_PACKED_STRUCT;
 typedef struct wifi_p2p_cfg_tmo_se_s wifi_p2p_cfg_tmo_se_t;
 
-
-BWL_PRE_PACKED_STRUCT struct wifi_p2p_listen_channel_se_s {
-	uint8	eltId;		
-	uint8	len[2];		
-	uint8	country[3];	
-	uint8	op_class;	
-	uint8	channel;	
-} BWL_POST_PACKED_STRUCT;
-typedef struct wifi_p2p_listen_channel_se_s wifi_p2p_listen_channel_se_t;
-
-
-BWL_PRE_PACKED_STRUCT struct wifi_p2p_grp_bssid_se_s {
-	uint8	eltId;		
-	uint8	len[2];		
-	uint8	mac[6];		
-} BWL_POST_PACKED_STRUCT;
-typedef struct wifi_p2p_grp_bssid_se_s wifi_p2p_grp_bssid_se_t;
-
-
-BWL_PRE_PACKED_STRUCT struct wifi_p2p_grp_id_se_s {
-	uint8	eltId;		
-	uint8	len[2];		
-	uint8	mac[6];		
-	uint8	ssid[1];	
-} BWL_POST_PACKED_STRUCT;
-typedef struct wifi_p2p_grp_id_se_s wifi_p2p_grp_id_se_t;
-
-
-BWL_PRE_PACKED_STRUCT struct wifi_p2p_intf_se_s {
-	uint8	eltId;		
-	uint8	len[2];		
-	uint8	mac[6];		
-	uint8	ifaddrs;	
-	uint8	ifaddr[1][6];	
-} BWL_POST_PACKED_STRUCT;
-typedef struct wifi_p2p_intf_se_s wifi_p2p_intf_se_t;
 
 
 BWL_PRE_PACKED_STRUCT struct wifi_p2p_status_se_s {
@@ -255,15 +215,6 @@ BWL_PRE_PACKED_STRUCT struct wifi_p2p_chanlist_se_s {
 typedef struct wifi_p2p_chanlist_se_s wifi_p2p_chanlist_se_t;
 
 
-BWL_PRE_PACKED_STRUCT struct wifi_p2p_pri_devtype_s {
-	uint16	cat_id;		
-	uint8	OUI[3];		
-	uint8	oui_type;	
-	uint16	sub_cat_id;	
-} BWL_POST_PACKED_STRUCT;
-typedef struct wifi_p2p_pri_devtype_s wifi_p2p_pri_devtype_t;
-
-
 BWL_PRE_PACKED_STRUCT struct wifi_p2p_devinfo_se_s {
 	uint8	eltId;			
 	uint8	len[2];			
@@ -313,23 +264,6 @@ BWL_PRE_PACKED_STRUCT struct wifi_p2p_grpinfo_se_s {
 typedef struct wifi_p2p_grpinfo_se_s wifi_p2p_grpinfo_se_t;
 
 
-BWL_PRE_PACKED_STRUCT struct wifi_p2p_op_channel_se_s {
-	uint8	eltId;		
-	uint8	len[2];		
-	uint8	country[3];	
-	uint8	op_class;	
-	uint8	channel;	
-} BWL_POST_PACKED_STRUCT;
-typedef struct wifi_p2p_op_channel_se_s wifi_p2p_op_channel_se_t;
-
-
-BWL_PRE_PACKED_STRUCT struct wifi_p2p_invite_flags_se_s {
-	uint8	eltId;		
-	uint8	len[2];		
-	uint8	flags;		
-} BWL_POST_PACKED_STRUCT;
-typedef struct wifi_p2p_invite_flags_se_s wifi_p2p_invite_flags_se_t;
-
 
 BWL_PRE_PACKED_STRUCT struct wifi_p2p_action_frame {
 	uint8	category;	
@@ -376,7 +310,6 @@ typedef struct wifi_p2p_pub_act_frame wifi_p2p_pub_act_frame_t;
 #define P2P_PAF_DEVDIS_RSP	6	
 #define P2P_PAF_PROVDIS_REQ	7	
 #define P2P_PAF_PROVDIS_RSP	8	
-#define P2P_PAF_SUBTYPE_INVALID	255
 
 
 #define P2P_TYPE_MNREQ		P2P_PAF_GON_REQ
