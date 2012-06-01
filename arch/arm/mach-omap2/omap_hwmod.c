@@ -1642,8 +1642,15 @@ int omap_hwmod_softreset(struct omap_hwmod *oh)
 	if (!oh || !(oh->_sysc_cache))
 		return -EINVAL;
 
-	_ocp_softreset(oh);
-	return 0;
+	v = oh->_sysc_cache;
+	ret = _set_softreset(oh, &v);
+	if (ret)
+		goto error;
+	/* Use raw write here to avoid sysc cache update */
+	_write_sysconfig_raw(v, oh);
+
+error:
+	return ret;
 }
 
 /**
