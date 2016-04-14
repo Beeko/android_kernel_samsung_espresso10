@@ -40,8 +40,6 @@
 #include <asm/ptrace.h>
 #include <asm/localtimer.h>
 
-#include <mach/sec_addon.h>
-
 /*
  * as from 2.5, kernels no longer have an init_tasks structure
  * so we need some other way of telling a new secondary core
@@ -645,8 +643,6 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 	if (ipinr >= IPI_TIMER && ipinr < IPI_TIMER + NR_IPI)
 		__inc_irq_stat(cpu, ipi_irqs[ipinr - IPI_TIMER]);
 
-	sec_debug_irq_log(ipinr, do_IPI, 1);
-
 	switch (ipinr) {
 	case IPI_TIMER:
 		irq_enter();
@@ -685,8 +681,6 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 		       cpu, ipinr);
 		break;
 	}
-
-	sec_debug_irq_log(ipinr, do_IPI, 2);
 
 	set_irq_regs(old_regs);
 }
