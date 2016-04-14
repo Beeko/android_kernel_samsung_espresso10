@@ -138,4 +138,5 @@ source "drivers/omap_hsi/Kconfig"
 
 source "drivers/sensors/Kconfig"
 
+source "drivers/battery/Kconfig"
 endmenu
