@@ -263,8 +263,8 @@ static int ltn_set_brightness(struct backlight_device *bd)
 		(lcd->enabled) &&
 		(lcd->current_brightness != lcd->bl)) {
 		update_brightness(dssdev);
-		dev_dbg(&bd->dev, "[%d] brightness=%d, bl=%d\n",
-			 lcd->pdata->panel_id, bd->props.brightness, lcd->bl);
+		dev_dbg(&bd->dev, "brightness=%d, bl=%d\n",
+			bd->props.brightness, lcd->bl);
 	}
 	mutex_unlock(&lcd->lock);
 	return ret;
@@ -491,7 +491,6 @@ out:
 static void ltn_panel_get_resolution(struct omap_dss_device *dssdev,
 					    u16 *xres, u16 *yres)
 {
-
 	*xres = dssdev->panel.timings.x_res;
 	*yres = dssdev->panel.timings.y_res;
 }
