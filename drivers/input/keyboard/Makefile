@@ -57,3 +57,4 @@ obj-$(CONFIG_KEYPAD_CYPRESS_20234)  += cypress-touchkey.o
 obj-$(CONFIG_KEYPAD_CYPRESS_20234)  += vendor/cypress-touchkey-firmware-20234.o
 obj-$(CONFIG_KEYBOARD_SEC_DOCK)		+= sec_dock_keyboard.o
 obj-$(CONFIG_KEYBOARD_CEC)		+= cec_keyboard.o
+obj-$(CONFIG_KEYBOARD_SEC_DOCK)		+= sec_dock_keyboard.o
