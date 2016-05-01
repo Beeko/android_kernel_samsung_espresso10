@@ -74,7 +74,6 @@
 #define TWL4030_MODULE_SECURED_REG	0x17
 #define TWL6032_MODULE_CHARGER		0x18
 #define TWL6030_MODULE_SLAVE_RES	0x19
-#define TWL6034_MODULE_LDO2		0x1A
 
 #define TWL_MODULE_USB		TWL4030_MODULE_USB
 #define TWL_MODULE_AUDIO_VOICE	TWL4030_MODULE_AUDIO_VOICE
@@ -133,34 +132,33 @@
 #define REG_INT_MSK_STS_C		0x08
 
 /* MASK INT REG GROUP A */
-#define TWL6030_PWR_INT_MASK		0x07
-#define TWL6030_RTC_INT_MASK		0x18
-#define TWL6030_HOTDIE_INT_MASK		0x20
+#define TWL6030_PWR_INT_MASK 		0x07
+#define TWL6030_RTC_INT_MASK 		0x18
+#define TWL6030_HOTDIE_INT_MASK 	0x20
 #define TWL6030_SMPSLDOA_INT_MASK	0xC0
 
 /* MASK INT REG GROUP B */
-#define TWL6030_SMPSLDOB_INT_MASK	0x01
-#define TWL6030_BATDETECT_INT_MASK	0x02
-#define TWL6030_SIMDETECT_INT_MASK	0x04
-#define TWL6030_MMCDETECT_INT_MASK	0x08
-#define TWL6030_GPADC_INT_MASK		0x60
-#define TWL6030_GASGAUGE_INT_MASK	0x80
+#define TWL6030_SMPSLDOB_INT_MASK 	0x01
+#define TWL6030_BATDETECT_INT_MASK 	0x02
+#define TWL6030_SIMDETECT_INT_MASK 	0x04
+#define TWL6030_MMCDETECT_INT_MASK 	0x08
+#define TWL6030_GPADC_INT_MASK 		0x60
+#define TWL6030_GASGAUGE_INT_MASK 	0x80
 
 /* MASK INT REG GROUP C */
-#define TWL6030_USBOTG_INT_MASK		0x0F
-#define TWL6030_CHARGER_CTRL_INT_MASK	0x10
-#define TWL6030_CHARGER_FAULT_INT_MASK	0x60
+#define TWL6030_USBOTG_INT_MASK  	0x0F
+#define TWL6030_CHARGER_CTRL_INT_MASK 	0x10
+#define TWL6030_CHARGER_FAULT_INT_MASK 	0x60
 
 #define TWL6030_MMCCTRL		0xEE
-#define TWL6034_MMCCTRL		0xED
 #define VMMC_AUTO_OFF			(0x1 << 3)
 #define SW_FC				(0x1 << 2)
 #define STS_MMC			0x1
 
 #define TWL6030_MMCDEBOUNCING	0xED
 #define MMC_DEB_BYPASS			(0x1 << 7)
-#define MMC_MINS_DEB_MASK		(0xF << 3)
-#define MMC_MEXT_DEB_MASK		(0x7 << 0)
+#define MMC_MINS_DEB_MASK			(0xF << 3)
+#define MMC_MEXT_DEB_MASK			(0x7 << 0)
 
 #define TWL6030_CFG_INPUT_PUPD3	0xF2
 #define MMC_PU				(0x1 << 3)
@@ -175,8 +173,8 @@
 #define TWL5030_REV_1_1			0x10
 #define TWL5030_REV_1_2			0x30
 
-#define TWL4030_CLASS_ID		0x4030
-#define TWL6030_CLASS_ID		0x6030
+#define TWL4030_CLASS_ID 		0x4030
+#define TWL6030_CLASS_ID 		0x6030
 unsigned int twl_rev(void);
 #define GET_TWL_REV (twl_rev())
 #define TWL_CLASS_IS(class, id)			\
@@ -188,12 +186,8 @@ static inline int twl_class_is_ ##class(void)	\
 TWL_CLASS_IS(4030, TWL4030_CLASS_ID)
 TWL_CLASS_IS(6030, TWL6030_CLASS_ID)
 
-
-#define TWL6030_CLASS		BIT(3)	/* TWL6030 class */
 #define TWL6032_SUBCLASS	BIT(4)  /* Phoenix Lite is a varient*/
-#define TWL6034_SUBCLASS	BIT(5)  /* Varient of Phoenix Lite */
 
-bool is_twl6030_lite(void);
 /*
  * Read and write single 8-bit registers
  */
@@ -476,9 +470,7 @@ int twl6030_unregister_notifier(struct notifier_block *nb,
 
 #define TWL4030_PM_MASTER_GLOBAL_TST		0xb6
 
-#define TWL6030_PHOENIX_MSK_TRANSITION		0x20
-#define TWL6030_PHOENIX_DEV_ON			0x25
-#define TWL6030_BBSPOR_CFG				0xE6
+#define TWL6030_PHOENIX_DEV_ON			0x06
 
 /*
  * TWL6030 PM Master module register offsets (use TWL_MODULE_PM_MASTER)
@@ -587,22 +579,6 @@ int twl6030_unregister_notifier(struct notifier_block *nb,
 #define RES_RC6MHZ		45
 #define RES_TEMP		46
 
-/*6025 resource*/
-#define RES_LDOUSB		47
-#define RES_SMPS5		48
-#define RES_SMPS4		49
-#define RES_SMPS3		50
-#define RES_SMPS2		51
-#define RES_SMPS1		52
-#define RES_LDOLN		53
-#define RES_LDO7		54
-#define RES_LDO6		55
-#define RES_LDO5		56
-#define RES_LDO4		57
-#define RES_LDO3		58
-#define RES_LDO2		59
-#define RES_LDO1		60
-
 /* 6032 extra resources */
 #define RES_LDOUSB		47
 #define RES_SMPS5		48
@@ -620,29 +596,6 @@ int twl6030_unregister_notifier(struct notifier_block *nb,
 #define RES_LDO1		60
 #define RES_VSYSMIN_HI	61
 
-#define RES_LDOn28		62
-#define RES_LDOn27		63
-#define RES_LDOn26		64
-#define RES_LDOn25		65
-#define RES_LDOn24		66
-#define RES_LDOn23		67
-#define RES_LDOn22		68
-#define RES_LDOn21		69
-#define RES_LDOn20		70
-#define RES_LDOn19		71
-#define RES_LDOn18		72
-#define RES_LDOn17		73
-#define RES_LDOn16		74
-
-#define RES_LDOn15		75
-#define RES_LDOn14		76
-#define RES_LDOn13		77
-#define RES_LDOn12		78
-
-#define RES_SMPS10		80
-#define RES_SMPS9		81
-#define RES_SMPS8		82
-#define RES_SMPS7		83
 /*
  * Power Bus Message Format ... these can be sent individually by Linux,
  * but are usually part of downloaded scripts that are run when various
@@ -657,7 +610,7 @@ int twl6030_unregister_notifier(struct notifier_block *nb,
  */
 
 #define MSG_BROADCAST(devgrp, grp, type, type2, state) \
-	((devgrp) << 13 | 1 << 12 | (grp) << 9 | (type2) << 7 \
+	( (devgrp) << 13 | 1 << 12 | (grp) << 9 | (type2) << 7 \
 	| (type) << 4 | (state))
 
 #define MSG_SINGULAR(devgrp, id, state) \
@@ -694,6 +647,8 @@ struct twl4030_bci_platform_data {
 	unsigned long features;
 
 	unsigned long errata;
+
+	struct cell_config *cell_cfg;
 };
 
 /* TWL4030_GPIO_MAX (18) GPIOs, with interrupts */
@@ -755,8 +710,6 @@ struct twl4030_usb_data {
 	int		(*phy_exit)(struct device *dev);
 	/* Power on/off the PHY */
 	int		(*phy_power)(struct device *dev, int iD, int on);
-	/* enable/disable  phy clocks */
-	int		(*phy_set_clock)(struct device *dev, int on);
 	/* suspend/resume of phy */
 	int		(*phy_suspend)(struct device *dev, int suspend);
 };
@@ -842,6 +795,7 @@ struct twl4030_codec_vibra_data {
 	int initial_vibrate;
 	int (*init)(void);
 	void (*exit)(void);
+	u8  voltage_raise_speed;
 };
 
 struct twl4030_codec_data {
@@ -863,8 +817,7 @@ struct twl4030_codec_data {
 
 struct twl4030_rtc_data {
 	unsigned int	auto_comp;
-	s16	comp_value;
-	struct rtc_time	rtc_default_time;
+	s16		comp_value;
 };
 
 struct twl4030_platform_data {
@@ -876,7 +829,6 @@ struct twl4030_platform_data {
 	struct twl4030_keypad_data		*keypad;
 	struct twl4030_usb_data			*usb;
 	struct twl4030_power_data		*power;
-
 	struct twl4030_rtc_data			*rtc;
 	struct twl4030_codec_data		*codec;
 
@@ -899,6 +851,7 @@ struct twl4030_platform_data {
 	struct regulator_init_data		*vintana2;
 	struct regulator_init_data		*vintdig;
 	/* TWL6030 DCDC regulators */
+	struct regulator_init_data		*vdd3;
 	struct regulator_init_data		*vmem;
 	struct regulator_init_data		*v2v1;
 	/* TWL6030 LDO regulators */
@@ -924,29 +877,6 @@ struct twl4030_platform_data {
 	struct regulator_init_data		*smps3;
 	struct regulator_init_data		*smps4;
 	struct regulator_init_data		*vio6032;
-	/* TWL6034 LDO regulators */
-	struct regulator_init_data		*ldo12;
-	struct regulator_init_data		*ldo13;
-	struct regulator_init_data		*ldo14;
-	struct regulator_init_data		*ldo15;
-	struct regulator_init_data		*ldo16;
-	struct regulator_init_data		*ldo17;
-	struct regulator_init_data		*ldo18;
-	struct regulator_init_data		*ldo19;
-	struct regulator_init_data		*ldo20;
-	struct regulator_init_data		*ldo21;
-	struct regulator_init_data		*ldo22;
-	struct regulator_init_data		*ldo23;
-	struct regulator_init_data		*ldo24;
-	struct regulator_init_data		*ldo25;
-	struct regulator_init_data		*ldo26;
-	struct regulator_init_data		*ldo27;
-	struct regulator_init_data		*ldo28;
-	/* TWL6034 DCDC regulators */
-	struct regulator_init_data		*smps7;
-	struct regulator_init_data		*smps8;
-	struct regulator_init_data		*smps9;
-	struct regulator_init_data		*smps10;
 
 	/* External control pins */
 	struct regulator_init_data		*sysen;
@@ -1028,21 +958,6 @@ static inline int twl4030charger_usb_en(int enable) { return 0; }
 #define TWL6030_REG_VDAC	45
 #define TWL6030_REG_VUSB	46
 
-/* PMC Pull-Up/Pull-Down/High-Z */
-#define TWL6030_REG_CFG_INPUT_PUPD1		0xF0
-#define TWL6030_REG_CFG_INPUT_PUPD2		0xF1
-#define TWL6030_REG_CFG_INPUT_PUPD3		0xF2
-#define TWL6030_REG_CFG_INPUT_PUPD4		0xF3
-#define TWL6030_REG_CFG_LDO_PD1			0xF4
-#define TWL6030_REG_CFG_LDO_PD2			0xF5
-#define TWL6030_REG_CFG_SMPS_PD			0xF6
-#define TWL6030_REG_TOGGLE1				0x90
-#define TWL6030_REG_TOGGLE2				0x91
-#define TWL6030_REG_TOGGLE3				0x92
-#define TWL6030_REG_MISC1				0xE4
-#define TWL6030_REG_MISC2				0xE5
-#define TWL6030_REG_CHARGERUSB_CTRL3	0xEA
-
 /* INTERNAL LDOs */
 #define TWL6030_REG_VRTC	47
 #define TWL6030_REG_CLK32KG	48
@@ -1069,34 +984,10 @@ static inline int twl4030charger_usb_en(int enable) { return 0; }
 #define TWL6030_REG_SYSEN	62
 #define TWL6030_REG_REGEN1	63
 
-
-#define TWL6034_REG_SMPSN7	64
-#define TWL6034_REG_SMPSN8	65
-#define TWL6034_REG_SMPSN9	66
-#define TWL6034_REG_SMPSN10	67
-
-#define TWL6034_REG_LDON12	68
-#define TWL6034_REG_LDON13	69
-#define TWL6034_REG_LDON14	70
-#define TWL6034_REG_LDON15	71
-
-#define TWL6034_REG_LDON16	72
-#define TWL6034_REG_LDON17	73
-#define TWL6034_REG_LDON18	74
-#define TWL6034_REG_LDON19	75
-#define TWL6034_REG_LDON20	76
-#define TWL6034_REG_LDON21	77
-#define TWL6034_REG_LDON22	78
-#define TWL6034_REG_LDON23	79
-#define TWL6034_REG_LDON24	80
-#define TWL6034_REG_LDON25	81
-#define TWL6034_REG_LDON26	82
-#define TWL6034_REG_LDON27	83
-#define TWL6034_REG_LDON28	84
-
 #define TWL6032_PREQ1_RES_ASS_A	0xd7
-#define TWL6034_PREQ1_RES_ASS_D	0xFB
 
 #define TWL6032_ERRATA_DB00119490	(1 << 0)
+#define TWL6030_ERRATA_DB00112620	(1 << 1)
+#define TWL6030_ERRATA_DB00110684	(1 << 2)
 
 #endif /* End of __TWL4030_H */

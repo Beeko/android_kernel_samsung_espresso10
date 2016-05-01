@@ -302,21 +302,13 @@ static int twl_rtc_set_time(struct device *dev, struct rtc_time *tm)
 	rtc_data[5] = bin2bcd(tm->tm_mon + 1);
 	rtc_data[6] = bin2bcd(tm->tm_year - 100);
 
-	printk(KERN_INFO"%s, %d/%d/%d %d:%d:%d\n", __func__,
-			tm->tm_year-100,
-			tm->tm_mon+1,
-			tm->tm_mday,
-			tm->tm_hour,
-			tm->tm_min,
-			tm->tm_sec);
-
 	/* Stop RTC while updating the TC registers */
 	ret = twl_rtc_read_u8(&save_control, REG_RTC_CTRL_REG);
 	if (ret < 0)
 		goto out;
 
 	save_control &= ~BIT_RTC_CTRL_REG_STOP_RTC_M;
-	ret = twl_rtc_write_u8(save_control, REG_RTC_CTRL_REG);
+	twl_rtc_write_u8(save_control, REG_RTC_CTRL_REG);
 	if (ret < 0)
 		goto out;
 
@@ -382,15 +374,6 @@ static int twl_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alm)
 	alarm_data[5] = bin2bcd(alm->time.tm_mon + 1);
 	alarm_data[6] = bin2bcd(alm->time.tm_year - 100);
 
-	printk(KERN_INFO"%s, %d/%d/%d %d:%d:%d\n", __func__,
-			alm->time.tm_year-100,
-			alm->time.tm_mon+1,
-			alm->time.tm_mday,
-			alm->time.tm_hour,
-			alm->time.tm_min,
-			alm->time.tm_sec);
-
-
 	/* update all the alarm registers in one shot */
 	ret = twl_i2c_write(TWL_MODULE_RTC, alarm_data,
 		(rtc_reg_map[REG_ALARM_SECONDS_REG]), ALL_TIME_REGS);
@@ -415,7 +398,6 @@ static irqreturn_t twl_rtc_interrupt(int irq, void *rtc)
 	res = twl_rtc_read_u8(&rd_reg, REG_RTC_STATUS_REG);
 	if (res)
 		goto out;
-
 	/*
 	 * Figure out source of interrupt: ALARM or TIMER in RTC_STATUS_REG.
 	 * only one (ALARM or RTC) interrupt source may be enabled
@@ -471,11 +453,11 @@ static struct rtc_class_ops twl_rtc_ops = {
 static int __devinit twl_rtc_probe(struct platform_device *pdev)
 {
 	struct rtc_device *rtc;
-	struct twl4030_rtc_data *rtc_platform_data
-		= pdev->dev.platform_data;
+	struct twl4030_rtc_data *rtc_platform_data = pdev->dev.platform_data;
 	int ret = -EINVAL;
 	int irq = platform_get_irq(pdev, 0);
-	u8 rd_reg;
+	u8 rd_reg, lsb_value, msb_value, control;
+	s16 comp_value;
 
 	if (irq <= 0)
 		goto out1;
@@ -484,17 +466,8 @@ static int __devinit twl_rtc_probe(struct platform_device *pdev)
 	if (ret < 0)
 		goto out1;
 
-	if (rd_reg & BIT_RTC_STATUS_REG_POWER_UP_M) {
+	if (rd_reg & BIT_RTC_STATUS_REG_POWER_UP_M)
 		dev_warn(&pdev->dev, "Power up reset detected.\n");
-
-		if (rtc_platform_data &&
-				rtc_platform_data->
-				rtc_default_time.tm_year > 100) {
-			twl_rtc_set_time(&pdev->dev,
-			&rtc_platform_data->rtc_default_time);
-		}
-
-	}
 
 	if (rd_reg & BIT_RTC_STATUS_REG_ALARM_M)
 		dev_warn(&pdev->dev, "Pending Alarm interrupt detected.\n");
@@ -556,25 +529,10 @@ static int __devinit twl_rtc_probe(struct platform_device *pdev)
 		dev_warn(&pdev->dev, "Cannot enable wakeup for IRQ %d\n", irq);
 
 	platform_set_drvdata(pdev, rtc);
-	{
-		struct rtc_time tm;
-		twl_rtc_read_time(&pdev->dev, &tm);
 
-		printk(KERN_INFO"%s, %d/%d/%d %d:%d:%d\n", __func__,
-				tm.tm_year-100,
-				tm.tm_mon+1,
-				tm.tm_mday,
-				tm.tm_hour,
-				tm.tm_min,
-				tm.tm_sec);
-	}
-
-	if (rtc_platform_data &&
-		rtc_platform_data->auto_comp) {
-
-		u8 lsb_value, msb_value, control;
-		s16 comp_value = ~(rtc_platform_data->comp_value) + 1;
-		dev_info(&pdev->dev, "Auto Comp =0x%x  2's-Complement=0x%x\n",
+	if (rtc_platform_data && rtc_platform_data->auto_comp) {
+		comp_value = ~(rtc_platform_data->comp_value) + 1;
+		dev_dbg(&pdev->dev, "Auto Comp=0x%x,  2's-Complement=0x%x\n",
 				rtc_platform_data->comp_value, comp_value);
 
 		lsb_value = comp_value & 0xFF;
@@ -591,11 +549,11 @@ static int __devinit twl_rtc_probe(struct platform_device *pdev)
 
 		ret |= twl_rtc_read_u8(&msb_value, REG_RTC_COMP_MSB_REG);
 		ret |= twl_rtc_read_u8(&lsb_value, REG_RTC_COMP_LSB_REG);
-		dev_info(&pdev->dev, "COMP_MSB=0x%x  COMP_LSB=0x%x\n",
+		dev_dbg(&pdev->dev, "COMP_MSB=0x%x  COMP_LSB=0x%x\n",
 				msb_value, lsb_value);
 
 		if (ret < 0)
-			dev_err(&pdev->dev, "Fail to Compensate RTC Clock\n");
+			dev_err(&pdev->dev, "failed to compensate RTC clock\n");
 	}
 
 	return 0;
@@ -635,9 +593,9 @@ static int __devexit twl_rtc_remove(struct platform_device *pdev)
 
 static void twl_rtc_shutdown(struct platform_device *pdev)
 {
-	/* mask timer interrupts*/
+	/* mask timer interrupts, but leave alarm interrupts on to enable
+	   power-on when alarm is triggered */
 	mask_rtc_irq_bit(BIT_RTC_INTERRUPTS_REG_IT_TIMER_M);
-
 #ifdef CONFIG_ANDROID
 	/* mask alarm interrupts as well so that we don't get powered on
 	   when alarm is triggered on android */
