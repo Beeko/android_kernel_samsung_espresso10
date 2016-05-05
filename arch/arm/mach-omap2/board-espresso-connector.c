@@ -22,11 +22,9 @@
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
-#include <linux/platform_data/fsa9480.h>
 #include <linux/regulator/consumer.h>
 #include <linux/usb/otg.h>
 #include <linux/delay.h>
-#include <linux/sii9234.h>
 #include <linux/i2c/twl.h>
 #include <linux/mutex.h>
 #include <linux/switch.h>
@@ -34,18 +32,15 @@
 #include <linux/mfd/stmpe811.h>
 #include <linux/sec_dock_keyboard.h>
 #include <linux/battery.h>
+#include <linux/bat_manager.h>
 #include <linux/irq.h>
-#ifdef CONFIG_USB_HOST_NOTIFY
-#include <linux/host_notify.h>
-#endif
 
 #include <plat/usb.h>
 
 #include "board-espresso.h"
 #include "mux.h"
-#include "omap_muxtbl.h"
 
-#include "omap_phy_tune.c"
+#define GPIO_TA_NCONNECTED		32
 
 #define CHARGERUSB_CTRL1		0x8
 #define CHARGERUSB_CTRL3		0xA
@@ -73,9 +68,6 @@
 #define MASK_SWITCH_USB_AP	0x01
 #define MASK_SWITCH_UART_AP	0x02
 
-#define SWCAP_TRIM_OFFSET_ESPRESSO	0x22
-#define SWCAP_TRIM_OFFSET_ESPRESSO10	0x31
-
 static char *device_names[] = {
 	[P30_OTG]			= "otg",
 	[P30_EARJACK_WITH_DOCK]		= "earjack",
@@ -101,13 +93,9 @@ struct omap4_otg {
 	int usb_manual_mode;
 	int uart_manual_mode;
 	int current_device;
-	int ta_nconnected;
 
 	struct switch_dev dock_switch;
 	struct switch_dev audio_switch;
-#ifdef CONFIG_USB_HOST_NOTIFY
-	struct host_notifier_platform_data *pdata;
-#endif
 };
 
 static struct omap4_otg espresso_otg_xceiv;
@@ -137,18 +125,22 @@ enum {
 static struct gpio connector_gpios[] = {
 	[GPIO_ACCESSORY_EN] = {
 		.flags	= GPIOF_OUT_INIT_LOW,
+		.gpio = 172,
 		.label = "ACCESSORY_EN",
 	},
 	[GPIO_ACCESSORY_INT] = {
 		.flags = GPIOF_IN,
+		.gpio = 39,
 		.label = "ACCESSORY_INT_1.8V",
 	},
 	[GPIO_DOCK_INT] = {
 		.flags = GPIOF_IN,
+		.gpio = 31,
 		.label = "DOCK_INT",
 	},
 	[GPIO_JIG_ON] = {
 		.flags = GPIOF_IN,
+		.gpio = 55,
 		.label = "JIG_ON_18",
 	},
 };
@@ -162,60 +154,20 @@ enum {
 static struct gpio uart_sw_gpios[] = {
 	[GPIO_USB_SEL1] = {
 		.flags	= GPIOF_OUT_INIT_HIGH,
+		.gpio	= 154,
 		.label	= "USB_SEL1",
 	},
 	[GPIO_USB_SEL2] = {
 		.flags	= GPIOF_OUT_INIT_HIGH,
+		.gpio	= 60,
 		.label	= "USB_SEL2",
 	},
 	[GPIO_UART_SEL] = {
 		.flags	= GPIOF_OUT_INIT_LOW,
+		.gpio	= 47,
 		.label	= "UART_SEL",
 	},
 };
-
-enum {
-	GPIO_MHL_RST = 0,
-	GPIO_MHL_INT,
-	GPIO_HDMI_EN,
-	GPIO_HDMI_HPD,
-};
-
-static struct gpio mhl_gpios[] = {
-	[GPIO_MHL_RST] = {
-		.flags  = GPIOF_OUT_INIT_LOW,
-		.label  = "MHL_RST",
-	},
-	[GPIO_MHL_INT] = {
-		.flags = GPIOF_IN,
-		.label  = "MHL_INT",
-	},
-	[GPIO_HDMI_EN] = {
-		.flags = GPIOF_OUT_INIT_LOW,
-		.label = "HDMI_EN",
-	},
-	[GPIO_HDMI_HPD] = {
-		.flags = GPIOF_IN,
-		.label  = "HDMI_HPD",
-	},
-};
-
-static BLOCKING_NOTIFIER_HEAD(acc_notifier);
-
-int acc_register_notifier(struct notifier_block *nb)
-{
-	return blocking_notifier_chain_register(&acc_notifier, nb);
-}
-
-int acc_unregister_notifier(struct notifier_block *nb)
-{
-	return blocking_notifier_chain_unregister(&acc_notifier, nb);
-}
-
-static int acc_notify(int event)
-{
-	return blocking_notifier_call_chain(&acc_notifier, event, NULL);
-}
 
 /* STMPE811 */
 static struct i2c_board_info __initdata espresso_i2c6_boardinfo[] = {
@@ -338,39 +290,10 @@ static void espresso_accessory_power(u32 device, bool enable)
 	}
 }
 
-#ifdef USB_TWL6030_5VOUT
 static void espresso_set_vbus_drive(bool enable)
 {
-	if (enable) {
-		/* Set the VBUS current limit to 500mA */
-		twl_i2c_write_u8(TWL_MODULE_MAIN_CHARGE, 0x09,
-				 CHARGERUSB_CINLIMIT);
-
-		/* The TWL6030 has a feature to automatically turn on
-		 * boost mode (VBUS Drive) when the ID signal is not
-		 * grounded.  This feature needs to be disabled on Tuna
-		 * as the ID signal is not hooked up to the TWL6030.
-		 */
-		twl_i2c_write_u8(TWL_MODULE_MAIN_CHARGE, 0x21,
-				 CHARGERUSB_CTRL3);
-		twl_i2c_write_u8(TWL_MODULE_MAIN_CHARGE, 0x40,
-				 CHARGERUSB_CTRL1);
-	} else {
-		twl_i2c_write_u8(TWL_MODULE_MAIN_CHARGE, 0x01,
-				 CHARGERUSB_CTRL3);
-		twl_i2c_write_u8(TWL_MODULE_MAIN_CHARGE, 0x00,
-				 CHARGERUSB_CTRL1);
-	}
-}
-#else
-static void espresso_set_vbus_drive(bool enable)
-{
-	struct omap4_otg *espresso_otg = &espresso_otg_xceiv;
-	if (espresso_otg->pdata->usbhostd_wakeup && enable)
-		espresso_otg->pdata->usbhostd_wakeup();
 	espresso_accessory_power(2, enable);
 }
-#endif
 
 static void espresso_ap_usb_attach(struct omap4_otg *otg)
 {
@@ -413,13 +336,6 @@ static void espresso_usb_host_attach(struct omap4_otg *otg)
 	/* Accessory power down needed */
 	espresso_accessory_power(0, 0);
 
-#ifdef CONFIG_USB_HOST_NOTIFY
-	if (otg->pdata && otg->pdata->usbhostd_start) {
-		otg->pdata->ndev.mode = NOTIFY_HOST_MODE;
-		otg->pdata->usbhostd_start();
-	}
-#endif
-
 	omap4_vusb_enable(otg, true);
 
 	otg->otg.state = OTG_STATE_A_IDLE;
@@ -433,13 +349,6 @@ static void espresso_usb_host_attach(struct omap4_otg *otg)
 
 static void espresso_usb_host_detach(struct omap4_otg *otg)
 {
-#ifdef CONFIG_USB_HOST_NOTIFY
-	if (otg->pdata && otg->pdata->usbhostd_stop) {
-		otg->pdata->ndev.mode = NOTIFY_NONE_MODE;
-		otg->pdata->usbhostd_stop();
-	}
-#endif
-
 	otg->otg.state = OTG_STATE_B_IDLE;
 	otg->otg.default_a = false;
 	otg->otg.last_event = USB_EVENT_NONE;
@@ -549,7 +458,7 @@ static void espresso_con_usb_charger_attached(struct omap4_otg *otg)
 	/* USB cable connected */
 	pr_info("%s, USB_EVENT_VBUS\n", __func__);
 
-	val = gpio_get_value(otg->ta_nconnected);
+	val = gpio_get_value(GPIO_TA_NCONNECTED);
 	if (val < 0) {
 		pr_err("usb ta_nconnected: gpio_get_value error %d\n", val);
 		return;
@@ -575,7 +484,7 @@ static void espresso_con_ta_charger_attached(struct omap4_otg *otg)
 	/* Change to USB_EVENT_CHARGER for sleep */
 	pr_info("%s, USB_EVENT_CHARGER\n", __func__);
 
-	val = gpio_get_value(otg->ta_nconnected);
+	val = gpio_get_value(GPIO_TA_NCONNECTED);
 	if (val < 0) {
 		pr_err("usb ta_nconnected: gpio_get_value error %d\n", val);
 		return;
@@ -599,97 +508,14 @@ static void espresso_con_charger_detached(void)
 {
 }
 
-static void switch_to_mhl_path(bool enable)
-{
-	/* TODO */
-}
-
-static void sii9234_power(int on)
-{
-	struct omap_mux_partition *p = omap_mux_get("core");
-	u16 mux;
-
-	mux = omap_mux_read(p, OMAP4_CTRL_MODULE_PAD_HDMI_HPD_OFFSET);
-	if (on) {
-		gpio_set_value(mhl_gpios[GPIO_HDMI_EN].gpio, 1);
-		msleep(20);
-		gpio_set_value(mhl_gpios[GPIO_MHL_RST].gpio, 1);
-
-		omap_mux_write(p, mux | OMAP_PULL_UP,
-				OMAP4_CTRL_MODULE_PAD_HDMI_HPD_OFFSET);
-	} else {
-		omap_mux_write(p, mux & ~OMAP_PULL_UP,
-				OMAP4_CTRL_MODULE_PAD_HDMI_HPD_OFFSET);
-
-		gpio_set_value(mhl_gpios[GPIO_HDMI_EN].gpio, 0);
-		gpio_set_value(mhl_gpios[GPIO_MHL_RST].gpio, 0);
-	}
-}
-
-static void sii9234_enable_vbus(bool enable)
-{
-	/*TODO */
-}
-
-static void sii9234_connect(bool on, u8 *devcap)
-{
-	/* TODO */
-}
-
-/* TODO: Need to modify sii9234_platform_data as per Espresso10
- * H/W requirements.Currently, introducing dummy functions to avoid
- * kernel panics and build-fail etc
-*/
-static struct sii9234_platform_data sii9234_pdata = {
-	.prio		= 0,
-	.enable		= switch_to_mhl_path,
-	.power		= sii9234_power,
-	.enable_vbus	= sii9234_enable_vbus,
-	.connect	= sii9234_connect,
-	.reg_notifier	= acc_register_notifier,
-	.unreg_notifier	= acc_unregister_notifier,
-	.dongle		= DONGLE_NONE,
-	.swing_level	= DEFAULT_MHL_SWING_LEVEL,
-	.early_read_devcap = NULL,
-};
-
 static void espresso_deskdock_attached(void)
 {
-	int ret = 0;
-
-	if (!board_is_espresso10()) {
-		espresso_set_dock_switch(UEVENT_DOCK_DESK);
-		return;
-	}
-
-	ret = acc_notify(DONGLE_ATTACHED);
-	if (ret <= 0) {
-		if (sii9234_pdata.dongle == DONGLE_9292)
-			pr_info("Error attaching MHL dongle_9292\n");
-		/*
-		 * TRICKY: MHL driver always return error value
-		 * in case of old dongles,because MHL driver can not
-		 * tell whether old dongle has successfuly connected
-		 * or not.
-		 */
-		else if (sii9234_pdata.dongle == DONGLE_9290)
-			pr_info("Attaching old MHL dongle_9290??\n");
-		espresso_set_dock_switch(UEVENT_DOCK_DESK);
-	}
+	espresso_set_dock_switch(UEVENT_DOCK_DESK);
 }
 
 static void espresso_deskdock_detached(void)
 {
-	int ret = 0;
-
-	if (!board_is_espresso10()) {
-		espresso_set_dock_switch(UEVENT_DOCK_NONE);
-		return;
-	}
-
-	ret = acc_notify(DONGLE_DETACHED);
-	if (ret <= 0)
-		espresso_set_dock_switch(UEVENT_DOCK_NONE);
+	espresso_set_dock_switch(UEVENT_DOCK_NONE);
 }
 
 static void espresso_30pin_detected(int device, bool connected)
@@ -715,28 +541,40 @@ static void espresso_30pin_detected(int device, bool connected)
 	case P30_KEYBOARDDOCK:
 		if (connected) {
 			espresso_set_dock_switch(UEVENT_DOCK_KEYBOARD);
+#ifdef CONFIG_SND_OMAP_SOC_ESPRESSO
 			notify_dock_status(1);
+#endif
 		} else {
 			espresso_set_dock_switch(UEVENT_DOCK_NONE);
+#ifdef CONFIG_SND_OMAP_SOC_ESPRESSO
 			notify_dock_status(0);
+#endif
 		}
 		break;
 	case P30_DESKDOCK:
 		if (connected) {
 			espresso_deskdock_attached();
+#ifdef CONFIG_SND_OMAP_SOC_ESPRESSO
 			notify_dock_status(1);
+#endif
 		} else {
 			espresso_deskdock_detached();
+#ifdef CONFIG_SND_OMAP_SOC_ESPRESSO
 			notify_dock_status(0);
+#endif
 		}
 		break;
 	case P30_CARDOCK:
 		if (connected) {
 			espresso_set_dock_switch(UEVENT_DOCK_CAR);
+#ifdef CONFIG_SND_OMAP_SOC_ESPRESSO
 			notify_dock_status(1);
+#endif
 		} else {
 			espresso_set_dock_switch(UEVENT_DOCK_NONE);
+#ifdef CONFIG_SND_OMAP_SOC_ESPRESSO
 			notify_dock_status(0);
+#endif
 		}
 		break;
 	case P30_JIG:
@@ -870,7 +708,6 @@ static ssize_t espresso_uart_sel_store(struct device *dev,
 	mutex_unlock(&espresso_otg->lock);
 
 	return size;
-
 }
 
 static ssize_t espresso_usb_sel_show(struct device *dev,
@@ -1066,17 +903,12 @@ static int espresso_otg_set_suspend(struct otg_transceiver *otg, int suspend)
 	return omap4430_phy_suspend(otg->dev, suspend);
 }
 
-static int espresso_otg_is_active(struct otg_transceiver *otg)
-{
-	return omap4430_phy_is_active(otg->dev);
-}
-
 static irqreturn_t ta_nconnected_irq(int irq, void *_otg)
 {
 	struct omap4_otg *otg = _otg;
 	int val;
 
-	val = gpio_get_value(otg->ta_nconnected);
+	val = gpio_get_value(GPIO_TA_NCONNECTED);
 	if (val < 0) {
 		pr_err("usb ta_nconnected: gpio_get_value error %d\n", val);
 		return IRQ_HANDLED;
@@ -1087,15 +919,10 @@ static irqreturn_t ta_nconnected_irq(int irq, void *_otg)
 	irq_set_irq_type(irq, val ?
 			IRQF_TRIGGER_LOW : IRQF_TRIGGER_HIGH);
 
-	if (!val) { /* connected */
-		/* TODO: check ADC here. */
+	if (!val) /* connected */
 		espresso_ap_usb_attach(otg);
-		if (board_is_espresso10()) acc_notify(DONGLE_POWER_ATTACHED);
-	} else { /* disconnected */
-		/* TODO: save current device. */
+	else      /* disconnected */
 		espresso_ap_usb_detach(otg);
-		if (board_is_espresso10()) acc_notify(DONGLE_POWER_DETACHED);
-	}
 
 	return IRQ_HANDLED;
 }
@@ -1105,28 +932,22 @@ static int espresso_vbus_detect_init(struct omap4_otg *otg)
 	int status = 0;
 	int irq = 0;
 	int val;
-	int ta_nconnected =
-		omap_muxtbl_get_gpio_by_name("TA_nCONNECTED");
 
-	dev_info(&otg->dev, "init TA_nCONNECTED : %d\n", ta_nconnected);
-
-	status = gpio_request(ta_nconnected, "TA_nCONNECTED");
+	status = gpio_request(GPIO_TA_NCONNECTED, "TA_nCONNECTED");
 	if (status < 0) {
-		dev_err(&otg->dev, "gpio %d request failed.\n", ta_nconnected);
+		dev_err(&otg->dev, "gpio %d request failed.\n", GPIO_TA_NCONNECTED);
 		return status;
 	}
 
-	status = gpio_direction_input(ta_nconnected);
+	status = gpio_direction_input(GPIO_TA_NCONNECTED);
 	if (status < 0) {
 		dev_err(&otg->dev, "failed to set gpio %d as input\n",
-				ta_nconnected);
+				GPIO_TA_NCONNECTED);
 		return status;
 	}
 
-	otg->ta_nconnected = ta_nconnected;
-	irq = gpio_to_irq(ta_nconnected);
-	dev_info(&otg->dev, "request_irq : %d(gpio: %d)\n", irq, ta_nconnected);
-	val = gpio_get_value(ta_nconnected);
+	irq = gpio_to_irq(GPIO_TA_NCONNECTED);
+	val = gpio_get_value(GPIO_TA_NCONNECTED);
 
 	status = request_threaded_irq(irq, NULL, ta_nconnected_irq,
 			(val ? IRQF_TRIGGER_LOW : IRQF_TRIGGER_HIGH) | \
@@ -1134,7 +955,7 @@ static int espresso_vbus_detect_init(struct omap4_otg *otg)
 			"TA_nConnected", otg);
 	if (status < 0) {
 		dev_err(&otg->dev, "request irq %d failed for gpio %d\n",
-				irq, ta_nconnected);
+				irq, GPIO_TA_NCONNECTED);
 		return status;
 	}
 
@@ -1192,7 +1013,7 @@ struct platform_device espresso_device_dock_keyboard = {
 	.id = 0,
 	.dev = {
 		.platform_data = &espresso_dock_keyboard_pdata,
-		},
+	},
 };
 
 static void __init espresso_switch_initial_setup(void)
@@ -1229,84 +1050,15 @@ static int __init espresso_save_init_switch_param(char *str)
 }
 __setup("switch_sel=", espresso_save_init_switch_param);
 
-
-#ifdef CONFIG_USB_HOST_NOTIFY
-static void espresso_booster(int enable)
-{
-	espresso_set_vbus_drive(!!enable);
-}
-
-static struct host_notifier_platform_data host_notifier_pdata = {
-	.ndev.name	= "usb_otg",
-	.booster	= espresso_booster,
-	.thread_enable = 1,
-};
-
-static struct platform_device host_notifier_device = {
-	.name = "host_notifier",
-	.dev.platform_data = &host_notifier_pdata,
-};
-
-static void espresso_host_notifier_init(struct omap4_otg *otg)
-{
-	int acc_out =
-		omap_muxtbl_get_gpio_by_name("V_ACCESSORY_OUT_5.0V");
-
-	if (acc_out < 0) {
-		dev_err(&otg->dev, "V_ACCESSORY_OUT_5.0V is invalid.\n");
-		return;
-	}
-
-	host_notifier_pdata.gpio = acc_out;
-	otg->pdata = &host_notifier_pdata;
-
-	platform_device_register(&host_notifier_device);
-}
-#endif
-
-static struct i2c_board_info __initdata espresso_i2c8_boardinfo[] = {
-	{
-		I2C_BOARD_INFO("sii9234_mhl_tx", 0x72>>1),
-		.platform_data = &sii9234_pdata,
-	},
-	{
-		I2C_BOARD_INFO("sii9234_tpi", 0x7A>>1),
-		.platform_data = &sii9234_pdata,
-	},
-	{
-		I2C_BOARD_INFO("sii9234_hdmi_rx", 0x92>>1),
-		.platform_data = &sii9234_pdata,
-	},
-	{
-		I2C_BOARD_INFO("sii9234_cbus", 0xC8>>1),
-		.platform_data = &sii9234_pdata,
-	},
-};
-
 static void connector_gpio_init(void)
 {
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(connector_gpios); i++)
-		connector_gpios[i].gpio =
-			omap_muxtbl_get_gpio_by_name(connector_gpios[i].label);
-
-	for (i = 0; i < ARRAY_SIZE(uart_sw_gpios); i++)
-		uart_sw_gpios[i].gpio =
-			omap_muxtbl_get_gpio_by_name(uart_sw_gpios[i].label);
+	if ((board_is_espresso10() && system_rev >= 8) ||
+		(!board_is_espresso10() && system_rev >= 10)) {
+		connector_gpios[GPIO_ACCESSORY_INT].gpio = 2;
+	}
 
 	gpio_request_array(connector_gpios, ARRAY_SIZE(connector_gpios));
 	gpio_request_array(uart_sw_gpios, ARRAY_SIZE(uart_sw_gpios));
-
-	if (board_is_espresso10() && board_is_bestbuy_variant()) {
-		for (i = 0; i < ARRAY_SIZE(mhl_gpios); i++)
-			mhl_gpios[i].gpio = omap_muxtbl_get_gpio_by_name(mhl_gpios[i].label);
-
-		gpio_request_array(mhl_gpios, ARRAY_SIZE(mhl_gpios));
-
-		espresso_i2c8_boardinfo[0].irq =
-			gpio_to_irq(mhl_gpios[GPIO_MHL_INT].gpio);
-	}
 }
 
 static int __init espresso_plugged_usb_cable_init(void)
@@ -1314,12 +1066,11 @@ static int __init espresso_plugged_usb_cable_init(void)
 	struct omap4_otg *espresso_otg = &espresso_otg_xceiv;
 
 	/* USB connected */
-	if (gpio_get_value(espresso_otg->ta_nconnected) == 0)
+	if (gpio_get_value(GPIO_TA_NCONNECTED) == 0)
 		omap4_vusb_enable(espresso_otg, true);
 
 	return 0;
 }
-
 fs_initcall(espresso_plugged_usb_cable_init);
 
 void __init omap4_espresso_connector_init(void)
@@ -1349,7 +1100,6 @@ void __init omap4_espresso_connector_init(void)
 	espresso_otg->otg.set_vbus		= espresso_otg_set_vbus;
 	espresso_otg->otg.init			= espresso_otg_phy_init;
 	espresso_otg->otg.shutdown		= espresso_otg_phy_shutdown;
-	espresso_otg->otg.is_active		= espresso_otg_is_active;
 
 	ATOMIC_INIT_NOTIFIER_HEAD(&espresso_otg->otg.notifier);
 
@@ -1359,16 +1109,8 @@ void __init omap4_espresso_connector_init(void)
 
 	omap4430_phy_init(&espresso_otg->dev);
 
-	if (board_is_espresso10())
-		omap4430_phy_init_for_eyediagram(SWCAP_TRIM_OFFSET_ESPRESSO10);
-	else
-		omap4430_phy_init_for_eyediagram(SWCAP_TRIM_OFFSET_ESPRESSO);
-
 	espresso_otg_set_suspend(&espresso_otg->otg, 0);
 	espresso_vbus_detect_init(espresso_otg);
-#ifdef CONFIG_USB_HOST_NOTIFY
-	espresso_host_notifier_init(espresso_otg);
-#endif
 
 	sec_switch_dev = device_create(sec_class, NULL, 0, NULL, "switch");
 	if (IS_ERR(sec_switch_dev)) {
@@ -1383,7 +1125,6 @@ void __init omap4_espresso_connector_init(void)
 		pr_err("fail to  create manual switch_sel sysfs group (%d)\n",
 									ret);
 switch_dev_fail:
-
 	espresso_switch_initial_setup();
 
 	/* dock keyboard */
@@ -1395,12 +1136,6 @@ switch_dev_fail:
 	/* ADC IC (STMPE811) */
 	i2c_register_board_info(6, espresso_i2c6_boardinfo,
 					ARRAY_SIZE(espresso_i2c6_boardinfo));
-
-	if (board_is_espresso10()) {
-		/* MHL (SII9244) */
-		i2c_register_board_info(8, espresso_i2c8_boardinfo,
-						ARRAY_SIZE(espresso_i2c8_boardinfo));
-	}
 
 	/* 30pin connector */
 	espresso_con_pdata.accessory_irq_gpio =
@@ -1419,15 +1154,3 @@ switch_dev_fail:
 
 	espresso_otg->current_device = 0;
 }
-
-int __init omap4_espresso_connector_late_init(void)
-{
-	if (!board_has_modem()) {
-		if (gpio_get_value(connector_gpios[GPIO_JIG_ON].gpio))
-			uart_set_l3_cstr(true);
-	}
-
-	return 0;
-}
-
-late_initcall(omap4_espresso_connector_late_init);

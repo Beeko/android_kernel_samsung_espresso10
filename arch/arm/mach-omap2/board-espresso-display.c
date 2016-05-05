@@ -21,37 +21,26 @@
 #include <linux/regulator/consumer.h>
 #include <linux/platform_data/panel-ltn.h>
 
-#include <plat/vram.h>
 #include <plat/omap_hwmod.h>
 #include <plat/android-display.h>
 
 #include <video/omapdss.h>
-#include <video/omap-panel-generic-dpi.h>
 
 #include "board-espresso.h"
-#include "control.h"
-#include "mux.h"
-#include "omap_muxtbl.h"
 
 #ifdef CONFIG_FB_OMAP_BOOTLOADER_INIT
 #include <plat/clock.h>
 #include <linux/clk.h>
 #endif
 
-#define ESPRESSO_FB_RAM_SIZE		SZ_16M	/* ~1280*720*4 * 2 */
-
-static struct ltn_panel_data espresso_panel_data;
-
-#ifdef CONFIG_FB_OMAP_BOOTLOADER_INIT
-static struct clk *dss_ick, *dss_sys_fclk, *dss_dss_fclk;
-#endif
+#define GPIO_LED_BACKLIGHT_RESET	95
+#define GPIO_LCD_EN			135
+#define GPIO_LVDS_NSHDN		136
 
 static void espresso_lcd_set_power(bool enable)
 {
-	pr_debug("(%s): espresso_lcd_set_power, enable=%d\n",
-		 __func__, enable);
-
-	gpio_set_value(espresso_panel_data.lcd_en_gpio, enable);
+	pr_debug("%s: %d\n", __func__, enable);
+	gpio_set_value(GPIO_LCD_EN, enable);
 }
 
 static void espresso_lcd_set_gptimer_idle(void)
@@ -64,14 +53,18 @@ static void espresso_lcd_set_gptimer_idle(void)
 		omap_hwmod_idle(timer10_hwmod);
 }
 
-#ifdef CONFIG_FB_OMAP_BOOTLOADER_INIT
-static void dss_clks_disable(void)
-{
-	clk_disable(dss_ick);
-	clk_disable(dss_dss_fclk);
-	clk_disable(dss_sys_fclk);
-}
-#endif
+static struct ltn_panel_data espresso_panel_data = {
+	.set_power			= espresso_lcd_set_power,
+	.set_gptimer_idle		= espresso_lcd_set_gptimer_idle,
+	.lvds_nshdn_gpio		= GPIO_LVDS_NSHDN,
+	.led_backlight_reset_gpio	= GPIO_LED_BACKLIGHT_RESET,
+	.backlight_gptimer_num		= 10,
+	.brightness_table = {
+		.platform_value	= {BRIGHTNESS_OFF, BRIGHTNESS_DIM, BRIGHTNESS_MIN,
+				BRIGHTNESS_25, BRIGHTNESS_DEFAULT, BRIGHTNESS_MAX},
+		.kernel_value	= { 0, 2, 3, 8, 40, 85 },
+	},
+};
 
 static struct omap_dss_device espresso_lcd_device = {
 	.name			= "lcd",
@@ -82,7 +75,6 @@ static struct omap_dss_device espresso_lcd_device = {
 	.channel		= OMAP_DSS_CHANNEL_LCD2,
 #ifdef CONFIG_FB_OMAP_BOOTLOADER_INIT
 	.skip_init		= true,
-	.dss_clks_disable	= dss_clks_disable,
 #else
 	.skip_init		= false,
 #endif
@@ -134,20 +126,13 @@ static struct omap_dss_board_info espresso_dss_data = {
 static struct omapfb_platform_data espresso_fb_pdata = {
 	.mem_desc = {
 		.region_cnt = 1,
-		.region = {
-			[0] = {
-				.size = ESPRESSO_FB_RAM_SIZE,
-			},
-		},
 	},
 };
 
 void __init omap4_espresso_memory_display_init(void)
 {
-	if (board_is_espresso10()) {
-		espresso_dss_data.devices[0]->panel =
-			espresso10_lcd_config.panel;
-	}
+	if (board_is_espresso10())
+		espresso_dss_data.devices[0]->panel = espresso10_lcd_config.panel;
 
 	omap_android_display_setup(&espresso_dss_data,
 				   NULL,
@@ -179,85 +164,32 @@ void __init omap4_espresso_display_early_init(void)
 		gpio5_hwmod->flags = HWMOD_INIT_NO_RESET;
 }
 
-static __init int setup_current_panel(char *opt)
-{
-	return kstrtoint(opt, 0, &espresso_panel_data.panel_id);
-}
-__setup("lcd_panel_id=", setup_current_panel);
-
 void __init omap4_espresso_display_init(void)
 {
-	struct ltn_panel_data *panel;
-	int ret, i;
+	int ret;
+#ifdef CONFIG_FB_OMAP_BOOTLOADER_INIT
+	struct clk *dss_dss_fclk;
+#endif
 
-	/* Default setting value for panel*/
-	int platform_brightness[] = {
-		BRIGHTNESS_OFF, BRIGHTNESS_DIM, BRIGHTNESS_MIN,
-		BRIGHTNESS_25, BRIGHTNESS_DEFAULT, BRIGHTNESS_MAX};
-	int kernel_brightness[] = {0, 1, 3, 8, 35, 94};
-	if (board_is_espresso10()) {
-		kernel_brightness[1] = 3;
-		kernel_brightness[4] = 47;
-		kernel_brightness[5] = 81;
+	if (board_is_espresso10())
 		espresso_panel_data.pwm_duty_max = 1600; /* 25kHz */
-	} else {
+	else
 		espresso_panel_data.pwm_duty_max = 1200; /* 32kHz */
-	}
 
 #ifdef CONFIG_FB_OMAP_BOOTLOADER_INIT
-	dss_ick = clk_get(NULL, "ick");
-	if (IS_ERR(dss_ick)) {
-		pr_err("Could not get dss interface clock\n");
-		/* return -ENOENT; */
-	 }
-
-	dss_sys_fclk = omap_clk_get_by_name("dss_sys_clk");
-	if (IS_ERR(dss_sys_fclk)) {
-		pr_err("Could not get dss system clock\n");
-		/* return -ENOENT; */
-	}
-	clk_enable(dss_sys_fclk);
 	dss_dss_fclk = omap_clk_get_by_name("dss_dss_clk");
 	if (IS_ERR(dss_dss_fclk)) {
 		pr_err("Could not get dss functional clock\n");
 		/* return -ENOENT; */
 	 }
+	 clk_enable(dss_dss_fclk);
 #endif
 
-	if (!board_is_espresso10() && espresso_panel_data.panel_id == 3) {
-		kernel_brightness[2] = 2;
-		kernel_brightness[3] = 7;
-		kernel_brightness[4] = 30;
-		kernel_brightness[5] = 80;
-	}
-
-	espresso_panel_data.lvds_nshdn_gpio =
-	    omap_muxtbl_get_gpio_by_name("LVDS_nSHDN");
-	espresso_panel_data.lcd_en_gpio =
-	    omap_muxtbl_get_gpio_by_name("LCD_EN");
-	espresso_panel_data.led_backlight_reset_gpio =
-	    omap_muxtbl_get_gpio_by_name("LED_BACKLIGHT_RESET");
-	espresso_panel_data.backlight_gptimer_num = 10;
-	espresso_panel_data.set_power = espresso_lcd_set_power;
-	espresso_panel_data.set_gptimer_idle = espresso_lcd_set_gptimer_idle;
-
-	for (i = 0 ; i < NUM_BRIGHTNESS_LEVEL ; i++) {
-		espresso_panel_data.brightness_table.platform_value[i] =
-			platform_brightness[i];
-		espresso_panel_data.brightness_table.kernel_value[i] =
-			kernel_brightness[i];
-	}
-
-	ret = gpio_request(espresso_panel_data.lcd_en_gpio, "lcd_en");
+	ret = gpio_request(GPIO_LCD_EN, "lcd_en");
 	if (ret < 0)
-		pr_err("(%s): gpio_request %d failed!\n", __func__,
-		       espresso_panel_data.lcd_en_gpio);
+		pr_err("%s: gpio_request %d failed!\n", __func__, GPIO_LCD_EN);
 
-	gpio_direction_output(espresso_panel_data.lcd_en_gpio, 1);
-
-	panel = &espresso_panel_data;
-
-	espresso_lcd_device.data = panel;
+	gpio_direction_output(GPIO_LCD_EN, 1);
 
 	omap_display_init(&espresso_dss_data);
 }

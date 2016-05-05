@@ -16,33 +16,29 @@
 #include <linux/delay.h>
 #include <linux/gpio.h>
 #include <asm/mach-types.h>
-#include <mach/cpufreq_limits.h>
 
 #include "mux.h"
-#include "omap_muxtbl.h"
-#include "omap44xx_muxtbl.h"
 #include "board-espresso.h"
+
+#define GPIO_IRDA_EN		59
+#define GPIO_IRDA_CONTROL	152
 
 #define CLOCK_VALUE 800000
 #define ON_OFFSET_VALUE -2
 #define OFF_OFFSET_VALUE 0
 
 #define MAX_SIZE 1024
-#define NANO_SEC 1000000000
 #define MICRO_SEC 1000000
 
-enum {
-	GPIO_IRDA_EN = 0,
-	GPIO_IRDA_CONTROL,
-};
-
 static struct gpio irled_gpios[] = {
-	[GPIO_IRDA_EN] = {
+	{
 		.flags = GPIOF_OUT_INIT_LOW,
+		.gpio = GPIO_IRDA_EN,
 		.label = "IRDA_EN",
 	},
-	[GPIO_IRDA_CONTROL] = {
+	{
 		.flags = GPIOF_OUT_INIT_LOW,
+		.gpio = GPIO_IRDA_CONTROL,
 		.label = "IRDA_CONTROL",
 	},
 };
@@ -64,17 +60,8 @@ static void irled_work(struct work_struct *work)
 	unsigned int off;
 	unsigned int i;
 	unsigned int j;
-	int ret;
 
-	ret =
-	    omap_cpufreq_max_limit(DVFS_LOCK_ID_IR_LED, ir_data.cpu_frequency);
-	ret |=
-	    omap_cpufreq_min_limit(DVFS_LOCK_ID_IR_LED, ir_data.cpu_frequency);
-
-	if (unlikely(ret < 0))
-		pr_err("irled: failed to lock cpufreq\n");
-
-	gpio_direction_output(irled_gpios[GPIO_IRDA_EN].gpio, 1);
+	gpio_direction_output(GPIO_IRDA_EN, 1);
 
 	__udelay(1000);
 
@@ -90,11 +77,9 @@ static void irled_work(struct work_struct *work)
 			break;
 
 		for (j = 0; j < ir_data.signal[i]; j++) {
-			gpio_direction_output(irled_gpios
-					      [GPIO_IRDA_CONTROL].gpio, 1);
+			gpio_direction_output(GPIO_IRDA_CONTROL, 1);
 			__udelay(on);
-			gpio_direction_output(irled_gpios
-					      [GPIO_IRDA_CONTROL].gpio, 0);
+			gpio_direction_output(GPIO_IRDA_CONTROL, 0);
 			__udelay(off);
 		}
 
@@ -115,17 +100,14 @@ static void irled_work(struct work_struct *work)
 			local_irq_disable();
 		}
 	}
-	gpio_direction_output(irled_gpios[GPIO_IRDA_CONTROL].gpio, 1);
+	gpio_direction_output(GPIO_IRDA_CONTROL, 1);
 	__udelay(on);
-	gpio_direction_output(irled_gpios[GPIO_IRDA_CONTROL].gpio, 0);
+	gpio_direction_output(GPIO_IRDA_CONTROL, 0);
 	__udelay(off);
 
 	local_irq_enable();
 
-	omap_cpufreq_min_limit_free(DVFS_LOCK_ID_IR_LED);
-	omap_cpufreq_max_limit_free(DVFS_LOCK_ID_IR_LED);
-
-	gpio_direction_output(irled_gpios[GPIO_IRDA_EN].gpio, 0);
+	gpio_direction_output(GPIO_IRDA_EN, 0);
 }
 
 static ssize_t irled_store(struct device *dev, struct device_attribute *attr,
@@ -185,12 +167,7 @@ static ssize_t clock_store(struct device *dev, struct device_attribute *attr,
 	unsigned int _data;
 	if (sscanf(buf, "%u", &_data) == 1)
 		if (_data == 300000 || _data == 600000 || _data == 800000
-		    || _data == 1008000
-#ifdef CONFIG_OMAP4430_CPU_OVERCLOCK
-		    || _data == 1200000 || _data == 1350000
-		    /* || _data == 1420000 || _data == 1480000 || _data == 1520000 */
-#endif
-		   )
+		    || _data == 1008000)
 			ir_data.cpu_frequency = _data;
 
 	return size;
@@ -321,8 +298,6 @@ int __init omap4_espresso_irled_init(void)
 	if (system_rev > 6 && !board_is_bestbuy_variant()) {
 		if (board_is_espresso10()) {
 			for (i = 0; i < ARRAY_SIZE(irled_gpios); i++) {
-				irled_gpios[i].gpio =
-				omap_muxtbl_get_gpio_by_name(irled_gpios[i].label);
 				omap_mux_set_gpio(
 					OMAP_PIN_INPUT_PULLDOWN | OMAP_MUX_MODE7,
 					irled_gpios[i].gpio);
@@ -331,16 +306,12 @@ int __init omap4_espresso_irled_init(void)
 		return 0;
 	}
 
-	for (i = 0; i < ARRAY_SIZE(irled_gpios); i++)
-		irled_gpios[i].gpio =
-		    omap_muxtbl_get_gpio_by_name(irled_gpios[i].label);
 	gpio_request_array(irled_gpios, ARRAY_SIZE(irled_gpios));
 
 	ret = irled_init();
 	if (ret < 0) {
 		pr_err("irled: irled_init failed\n");
-		for (i = 0; i < ARRAY_SIZE(irled_gpios); i++)
-			gpio_free(irled_gpios[i].gpio);
+		gpio_free_array(irled_gpios, ARRAY_SIZE(irled_gpios));
 	}
 
 	return ret;
